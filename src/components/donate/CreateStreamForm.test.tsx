@@ -44,7 +44,11 @@ vi.mock('@/lib/stellar', () => ({
   getUsdcAssetAddress: () => USDC_TOKEN_ADDRESS,
   getTokenBalance: (...args: unknown[]) => mockGetTokenBalance(...args),
   getTokenDecimals: (...args: unknown[]) => mockGetTokenDecimals(...args),
+  NATIVE_ACCOUNT_RESERVE: 10_000_000n,
+  NATIVE_FEE_ESTIMATE: 1_000_000n,
+  NATIVE_FEE_RESERVE: 11_000_000n,
 }));
+
 
 const mockCreateStream = vi.fn();
 
@@ -396,6 +400,88 @@ describe('CreateStreamForm', () => {
 
     expect(screen.queryByText(/exceeds your wallet balance/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /review & sign/i })).not.toBeDisabled();
+  });
+
+  describe('Max button and fee reserve (#237)', () => {
+    it('sets the amount for native XLM leaving the reserve plus estimated fee', async () => {
+      // Default mock balance is 5,000 XLM (50000000000 raw)
+      const user = userEvent.setup();
+      render(<CreateStreamForm ngoAddress={NGO_ADDRESS} />);
+
+      await screen.findByText(/wallet balance: 5,000/i);
+      const maxButton = screen.getByRole('button', { name: /set amount to max/i });
+      await user.click(maxButton);
+
+      const amountInput = screen.getByPlaceholderText('100') as HTMLInputElement;
+      // 5000 XLM - 1.1 XLM reserve+fee = 4998.9 XLM
+      expect(amountInput.value).toBe('4998.9');
+      expect(screen.queryByText(/exceeds your wallet balance/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /review & sign/i })).not.toBeDisabled();
+    });
+
+    it('warns when depositing the entire native XLM balance without leaving reserve and fee', async () => {
+      mockGetTokenBalance.mockResolvedValue('1000000000'); // 100 XLM
+
+      const user = userEvent.setup();
+      render(<CreateStreamForm ngoAddress={NGO_ADDRESS} />);
+
+      await screen.findByText(/wallet balance: 100/i);
+      // Typing 100 XLM exceeds the spendable balance of 98.9 XLM (100 - 1.1)
+      await user.type(screen.getByPlaceholderText('100'), '100');
+
+      expect(
+        screen.getByText(/exceeds your wallet balance — the transaction will fail/i),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /review & sign/i })).toBeDisabled();
+    });
+
+    it('sets the full balance for non-native tokens without subtracting reserve or fee', async () => {
+      const user = userEvent.setup();
+      render(<CreateStreamForm ngoAddress={NGO_ADDRESS} />);
+
+      await screen.findByText(/wallet balance: 5,000/i);
+      mockGetTokenBalance.mockClear();
+      mockGetTokenBalance.mockResolvedValue('20000000000'); // 2,000 USDC
+
+      await user.click(screen.getByLabelText(/usdc/i));
+      await screen.findByText(/wallet balance: 2,000/i);
+
+      const maxButton = screen.getByRole('button', { name: /set amount to max/i });
+      await user.click(maxButton);
+
+      const amountInput = screen.getByPlaceholderText('100') as HTMLInputElement;
+      expect(amountInput.value).toBe('2000');
+      expect(screen.queryByText(/exceeds your wallet balance/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /review & sign/i })).not.toBeDisabled();
+    });
+
+    it('sets the full balance for custom tokens using token decimals', async () => {
+      mockGetTokenDecimals.mockResolvedValue(6);
+      mockGetTokenBalance.mockImplementation((token: string) => {
+        if (token === NATIVE_TOKEN_ADDRESS) return Promise.resolve('50000000000');
+        return Promise.resolve('50000000'); // 50 custom tokens (6 decimals)
+      });
+
+      const user = userEvent.setup();
+      render(<CreateStreamForm ngoAddress={NGO_ADDRESS} />);
+
+
+      await screen.findByText(/wallet balance: 5,000/i);
+      await user.click(screen.getByLabelText(/custom asset/i));
+
+      const contractInput = screen.getByPlaceholderText(/token contract address/i);
+      await user.type(contractInput, 'C' + 'A'.repeat(55));
+
+      await screen.findByText(/wallet balance: 50/i);
+
+      const maxButton = screen.getByRole('button', { name: /set amount to max/i });
+      await user.click(maxButton);
+
+      const amountInput = screen.getByPlaceholderText('100') as HTMLInputElement;
+      expect(amountInput.value).toBe('50');
+      expect(screen.queryByText(/exceeds your wallet balance/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /review & sign/i })).not.toBeDisabled();
+    });
   });
 
   describe('amount validation message (#203)', () => {

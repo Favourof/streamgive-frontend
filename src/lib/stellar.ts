@@ -60,8 +60,16 @@ const PUBLIC_NETWORK_PASSPHRASE = 'Public Global Stellar Network ; September 201
  */
 export const IS_MAINNET = NETWORK_PASSPHRASE === PUBLIC_NETWORK_PASSPHRASE;
 
-/** Human-readable name for whichever network NETWORK_PASSPHRASE selects. */
 export const NETWORK_NAME = IS_MAINNET ? 'Mainnet' : 'Testnet';
+
+/** Minimum base reserve kept to maintain an active Stellar account (1 XLM in stroops). */
+export const NATIVE_ACCOUNT_RESERVE = 10_000_000n;
+
+/** Estimated network fee buffer for Soroban contract invocations (0.1 XLM in stroops). */
+export const NATIVE_FEE_ESTIMATE = 1_000_000n;
+
+/** Total reserve plus estimated fee subtracted from native XLM balance. */
+export const NATIVE_FEE_RESERVE = NATIVE_ACCOUNT_RESERVE + NATIVE_FEE_ESTIMATE;
 
 // A fee/sequence-agnostic simulation, not a real submission, so a
 // throwaway source account with sequence 0 is fine — the balance() call

@@ -48,6 +48,18 @@ export function formatEstimatedFee(feeStroops: string | undefined): string | nul
   return `≈ ${formatAmount(feeStroops)} XLM`;
 }
 
+/** Formats a raw bigint amount into a plain decimal string suitable for an HTML
+ * <input type="number"> (no thousands separators, trimmed trailing zeros). */
+export function formatAmountInput(raw: bigint, decimals: number = TOKEN_DECIMALS): string {
+  if (raw <= 0n) return '0';
+  const divisor = 10n ** BigInt(decimals);
+  const whole = raw / divisor;
+  const fraction = raw % divisor;
+  const fractionStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return fractionStr ? `${whole}.${fractionStr}` : whole.toString();
+}
+
+
 /** Parses a user-typed decimal amount (e.g. from a text input) into a raw
  * i128 value in the token's base units, or `null` if the input isn't a
  * valid positive amount or has more than `decimals` decimal places.
