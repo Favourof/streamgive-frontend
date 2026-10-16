@@ -64,62 +64,82 @@ export function EmbedSnippet({ ngoId }: { ngoId: string }) {
         attribute — wallet connection needs popups and scripts.
       </p>
 
-      <div className="mt-3 flex flex-wrap items-end gap-3">
-        <label className="block">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Size</span>
-          <select
-            value={preset}
-            onChange={(event) => setPreset(event.target.value as PresetKey)}
-            className="mt-1 block rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+      <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="flex-1">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="block">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Size</span>
+              <select
+                aria-label="Size"
+                value={preset}
+                onChange={(event) => setPreset(event.target.value as PresetKey)}
+                className="mt-1 block rounded-md border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+              >
+                {Object.entries(SIZE_PRESETS).map(([key, { label }]) => (
+                  <option key={key} value={key}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {preset === 'custom' && (
+              <>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Width</span>
+                  <input
+                    type="number"
+                    aria-label="Width"
+                    min={100}
+                    value={customWidth}
+                    onChange={(event) => setCustomWidth(Number(event.target.value) || 0)}
+                    className="mt-1 block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Height</span>
+                  <input
+                    type="number"
+                    aria-label="Height"
+                    min={100}
+                    value={customHeight}
+                    onChange={(event) => setCustomHeight(Number(event.target.value) || 0)}
+                    className="mt-1 block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+
+          <textarea
+            readOnly
+            rows={2}
+            value={snippet}
+            onClick={(event) => event.currentTarget.select()}
+            className="mt-3 w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 font-mono text-xs dark:border-gray-700 dark:bg-gray-800"
+          />
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            className="mt-3 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
           >
-            {Object.entries(SIZE_PRESETS).map(([key, { label }]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
+            Copy snippet
+          </button>
+        </div>
 
-        {preset === 'custom' && (
-          <>
-            <label className="block">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Width</span>
-              <input
-                type="number"
-                min={100}
-                value={customWidth}
-                onChange={(event) => setCustomWidth(Number(event.target.value) || 0)}
-                className="mt-1 block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Height</span>
-              <input
-                type="number"
-                min={100}
-                value={customHeight}
-                onChange={(event) => setCustomHeight(Number(event.target.value) || 0)}
-                className="mt-1 block w-24 rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900"
-              />
-            </label>
-          </>
-        )}
+        <div className="shrink-0">
+          <span className="block text-xs font-medium text-gray-500 dark:text-gray-400">Preview</span>
+          <div className="mt-2 overflow-hidden rounded-md border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+            <iframe
+              src={`${origin}/embed/${ngoId}`}
+              width={width}
+              height={height}
+              title="Donate widget preview"
+              style={{ border: 0 }}
+            />
+          </div>
+        </div>
       </div>
-
-      <textarea
-        readOnly
-        rows={2}
-        value={snippet}
-        onClick={(event) => event.currentTarget.select()}
-        className="mt-3 w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 font-mono text-xs dark:border-gray-700 dark:bg-gray-800"
-      />
-      <button
-        type="button"
-        onClick={() => void handleCopy()}
-        className="mt-3 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-      >
-        Copy snippet
-      </button>
     </div>
   );
 }
