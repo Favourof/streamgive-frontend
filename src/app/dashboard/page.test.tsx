@@ -1,11 +1,12 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DashboardPage from './page';
 import * as WalletProviderMod from '@/components/wallet/WalletProvider';
 import * as ApiMod from '@/lib/api';
 import type { Stream } from '@/lib/api';
+import { buildDonationHistoryCsv } from '@/lib/csv';
 
 function makeStream(overrides: Partial<Stream> = {}): Stream {
   return {
@@ -24,6 +25,14 @@ function makeStream(overrides: Partial<Stream> = {}): Stream {
   };
 }
 
+vi.mock('@/components/layout/Header', () => ({ Header: () => null }));
+vi.mock('@/components/layout/Footer', () => ({ Footer: () => null }));
+vi.mock('@/components/dashboard/StreamControls', () => ({ StreamControls: () => null }));
+vi.mock('@/components/toast/ToastProvider', () => ({
+  useToast: () => ({ showToast: vi.fn() }),
+}));
+
+
 vi.mock('@/components/wallet/WalletProvider', () => ({
   useWallet: vi.fn(),
 }));
@@ -36,8 +45,9 @@ vi.mock('@/lib/csv', () => ({
   buildDonationHistoryCsv: vi.fn(),
 }));
 
+
 describe('DashboardPage', () => {
-  it('shows empty state when donor has no streams', async () => {
+  function mockConnectedWallet() {
     vi.spyOn(WalletProviderMod, 'useWallet').mockReturnValue({
       address: 'G123',
       connecting: false,
@@ -45,7 +55,12 @@ describe('DashboardPage', () => {
       disconnect: vi.fn(),
       signTransaction: vi.fn(),
       signMessage: vi.fn(),
+      networkMismatch: false,
     });
+  }
+
+  it('shows empty state when donor has no streams', async () => {
+    mockConnectedWallet();
 
     vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([]);
 
@@ -65,14 +80,7 @@ describe('DashboardPage', () => {
     const streamTwo = makeStream({ id: 's2', onChainId: '202', status: 'CANCELLED' });
 
     it('filters the list by on-chain stream ID', async () => {
-      vi.spyOn(WalletProviderMod, 'useWallet').mockReturnValue({
-        address: 'G123',
-        connecting: false,
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        signTransaction: vi.fn(),
-        signMessage: vi.fn(),
-      });
+      mockConnectedWallet();
       vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([streamOne, streamTwo]);
 
       const user = userEvent.setup();
@@ -92,14 +100,7 @@ describe('DashboardPage', () => {
     });
 
     it('shows a no-match message for a stream ID that does not exist', async () => {
-      vi.spyOn(WalletProviderMod, 'useWallet').mockReturnValue({
-        address: 'G123',
-        connecting: false,
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        signTransaction: vi.fn(),
-        signMessage: vi.fn(),
-      });
+      mockConnectedWallet();
       vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([streamOne, streamTwo]);
 
       const user = userEvent.setup();
@@ -121,17 +122,11 @@ describe('DashboardPage', () => {
     );
 
     function setup() {
-      vi.spyOn(WalletProviderMod, 'useWallet').mockReturnValue({
-        address: 'G123',
-        connecting: false,
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        signTransaction: vi.fn(),
-        signMessage: vi.fn(),
-      });
+      mockConnectedWallet();
       vi.spyOn(ApiMod, 'getStreams').mockResolvedValue(manyStreams);
       render(<DashboardPage />);
     }
+
 
     const rows = () => screen.getAllByRole('button', { name: 'View details' });
 
@@ -182,17 +177,6 @@ describe('DashboardPage', () => {
   });
 
   describe('background polling', () => {
-    function mockConnectedWallet() {
-      vi.spyOn(WalletProviderMod, 'useWallet').mockReturnValue({
-        address: 'G123',
-        connecting: false,
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-        signTransaction: vi.fn(),
-        signMessage: vi.fn(),
-      });
-    }
-
     it('re-fetches streams every 30 seconds while the tab is visible', async () => {
       vi.useFakeTimers();
       try {
@@ -258,4 +242,63 @@ describe('DashboardPage', () => {
       }
     });
   });
+
+  describe('CSV export (#238)', () => {
+    const activeStream = makeStream({ id: 's1', onChainId: '101', status: 'ACTIVE' });
+    const cancelledStream = makeStream({ id: 's2', onChainId: '202', status: 'CANCELLED' });
+
+    beforeEach(() => {
+      window.URL.createObjectURL = vi.fn().mockReturnValue('blob:test');
+      window.URL.revokeObjectURL = vi.fn();
+    });
+
+    it('exports only active streams when Active filter is selected', async () => {
+      mockConnectedWallet();
+      vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([activeStream, cancelledStream]);
+
+      const user = userEvent.setup();
+      render(<DashboardPage />);
+
+      await waitFor(() => expect(screen.getAllByText('Test NGO')).toHaveLength(1));
+
+      // Active filter is selected by default when active streams exist
+      await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+      expect(buildDonationHistoryCsv).toHaveBeenCalledWith([activeStream]);
+    });
+
+    it('exports all streams when All filter is selected', async () => {
+      mockConnectedWallet();
+      vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([activeStream, cancelledStream]);
+
+      const user = userEvent.setup();
+      render(<DashboardPage />);
+
+      await waitFor(() => expect(screen.getAllByText('Test NGO')).toHaveLength(1));
+
+      await user.click(screen.getByRole('button', { name: 'All' }));
+      await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+      expect(buildDonationHistoryCsv).toHaveBeenCalledWith([activeStream, cancelledStream]);
+    });
+
+    it('exports only search-matching streams when searching by stream ID', async () => {
+      mockConnectedWallet();
+      vi.spyOn(ApiMod, 'getStreams').mockResolvedValue([activeStream, cancelledStream]);
+
+      const user = userEvent.setup();
+      render(<DashboardPage />);
+
+      await waitFor(() => expect(screen.getAllByText('Test NGO')).toHaveLength(1));
+
+      await user.click(screen.getByRole('button', { name: 'All' }));
+      const search = screen.getByPlaceholderText('Search by stream ID…');
+      await user.type(search, '202');
+
+      await user.click(screen.getByRole('button', { name: 'Export CSV' }));
+
+      expect(buildDonationHistoryCsv).toHaveBeenCalledWith([cancelledStream]);
+    });
+  });
 });
+

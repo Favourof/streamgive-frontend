@@ -22,12 +22,23 @@ function makeStream(overrides: Partial<Stream> = {}): Stream {
 }
 
 describe('buildDonationHistoryCsv', () => {
-  it('emits a header row and one row per stream', () => {
+  it('emits a UTF-8 BOM, a header row and one row per stream with all details', () => {
     const csv = buildDonationHistoryCsv([makeStream()]);
     const [header, row] = csv.split('\n');
 
-    expect(header).toBe('NGO,Token,Status,Committed,Withdrawn,Created');
-    expect(row).toBe('Test NGO,XLM,Active,0.7,0.2,1/15/2026');
+    expect(header).toBe(
+      '\uFEFFStream ID,NGO,Token,Status,Committed,Withdrawn,Rate per second,Remaining,Created',
+    );
+    expect(row).toBe('1,Test NGO,XLM,Active,0.7,0.2,0.00001,~13 hours remaining,1/15/2026');
+  });
+
+  it('prefixes the output with a UTF-8 BOM so spreadsheet apps handle non-ASCII names', () => {
+    const csv = buildDonationHistoryCsv([
+      makeStream({ ngo: { id: 'ngo1', name: 'Médecins du Monde', ownerAddress: 'GOWNER' } }),
+    ]);
+
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('Médecins du Monde');
   });
 
   it('labels non-native tokens by contract address and cancelled streams as Cancelled', () => {
@@ -36,17 +47,24 @@ describe('buildDonationHistoryCsv', () => {
     ]);
     const [, row] = csv.split('\n');
 
-    expect(row).toBe('Test NGO,CUSDCCONTRACT,Cancelled,0.7,0.2,1/15/2026');
+    expect(row).toBe(
+      '1,Test NGO,CUSDCCONTRACT,Cancelled,0.7,0.2,0.00001,~13 hours remaining,1/15/2026',
+    );
   });
 
   it('quotes fields containing a comma', () => {
-    const csv = buildDonationHistoryCsv([makeStream({ ngo: { id: 'ngo1', name: 'Hope, Inc.', ownerAddress: 'GOWNER' } })]);
+    const csv = buildDonationHistoryCsv([
+      makeStream({ ngo: { id: 'ngo1', name: 'Hope, Inc.', ownerAddress: 'GOWNER' } }),
+    ]);
     const [, row] = csv.split('\n');
 
-    expect(row).toBe('"Hope, Inc.",XLM,Active,0.7,0.2,1/15/2026');
+    expect(row).toBe('1,"Hope, Inc.",XLM,Active,0.7,0.2,0.00001,~13 hours remaining,1/15/2026');
   });
 
-  it('returns just the header for no streams', () => {
-    expect(buildDonationHistoryCsv([])).toBe('NGO,Token,Status,Committed,Withdrawn,Created');
+  it('returns just the BOM and header for no streams', () => {
+    expect(buildDonationHistoryCsv([])).toBe(
+      '\uFEFFStream ID,NGO,Token,Status,Committed,Withdrawn,Rate per second,Remaining,Created',
+    );
   });
 });
+

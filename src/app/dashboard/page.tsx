@@ -141,7 +141,7 @@ export default function DashboardPage() {
     function poll() {
       const controller = new AbortController();
       activeController = controller;
-      getStreams({ donor: address }, controller.signal)
+      getStreams({ donor: address ?? undefined }, controller.signal)
         .then((data) => {
           if (!cancelled) {
             setStreams(data);
@@ -286,11 +286,12 @@ export default function DashboardPage() {
 
               <button
                 type="button"
-                onClick={() => downloadDonationHistoryCsv(streams)}
+                onClick={() => downloadDonationHistoryCsv(filteredStreams)}
                 className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
               >
                 Export CSV
               </button>
+
             </div>
 
             <div className="mt-8 flex gap-4 border-b border-gray-200 dark:border-gray-800">
